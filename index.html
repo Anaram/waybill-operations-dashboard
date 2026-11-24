@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>داشبورد عملیات باربری | نمونه‌کار</title>
+<style>
+:root{color-scheme:light;--navy:#142a3e;--teal:#00776f;--ink:#183249;--muted:#4f6575;--line:#dce5e9;--paper:#f0f4f5}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.6 "B Nazanin",Tahoma,Arial,sans-serif}
+header{background:var(--navy);color:white;padding:25px max(24px,calc((100% - 1232px)/2));display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+h1,h2,p{margin:0}h1{font-size:32px;line-height:1.3}h2{font-size:21px}header p{color:#d2e5e9;margin-top:4px}
+main{max-width:1280px;margin:auto;padding:22px 24px 35px}
+.filters{display:flex;gap:14px;align-items:end;flex-wrap:wrap;margin-bottom:18px}
+label{display:grid;gap:3px;font-weight:bold}select,button{font:inherit;border:1px solid #aabfc8;border-radius:8px;min-height:40px;padding:3px 12px;background:white;color:var(--ink)}button{cursor:pointer}select:focus-visible,button:focus-visible{outline:3px solid #00776f;outline-offset:2px}.filter-note{margin-inline-start:auto;color:var(--muted);align-self:center}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}.card,.panel{background:white;border:1px solid var(--line);border-radius:12px;padding:15px 18px}.card{border-top:4px solid var(--teal)}.card span,.detail{color:var(--muted)}.card strong{font-size:32px;display:block;line-height:1.4}.grid{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;margin-bottom:14px}
+#trend{width:100%;height:auto;display:block;margin-top:8px}.bar-row{display:grid;grid-template-columns:85px 1fr 60px;gap:10px;align-items:center;margin:7px 0}.bar-track{background:#edf2f3;border-radius:5px;height:13px}.bar{height:100%;min-width:0;border-radius:5px;background:var(--teal)}.bar-row strong{text-align:left;font-variant-numeric:tabular-nums}
+table{border-collapse:collapse;width:100%;min-width:420px}th,td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--line)}th{color:var(--muted)}tr:last-child td{border-bottom:0}.scroll{overflow:auto}
+@media(max-width:760px){header{padding:16px} main{padding:15px}.kpis{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}h1{font-size:26px}.filter-note{margin-inline-start:0}}
+</style>
+</head>
+<body>
+<header><div><h1>داشبورد عملیات باربری</h1><p>بارنامه، کمیسیون و تحلیل مسیرهای حمل</p></div><span>نمونه‌کار با داده‌های کاملاً ساختگی</span></header>
+<main>
+<section class="filters" aria-label="فیلترهای گزارش">
+<label>ماه<select id="month"><option value="">همهٔ ماه‌ها</option></select></label>
+<label>استان مبدأ<select id="province"><option value="">همهٔ استان‌ها</option></select></label>
+<label>شاخص نمودارها<select id="measure"><option value="count">تعداد بارنامه</option><option value="commission">کمیسیون</option></select></label>
+<button id="reset" type="button">بازنشانی فیلترها</button>
+<span class="filter-note">دورهٔ نمونه · فروردین تا اسفند ۱۴۰۳</span>
+</section>
+<section class="kpis" aria-label="شاخص‌های کلیدی" aria-live="polite">
+<div class="card"><span>تعداد بارنامه</span><strong id="count"></strong><span>سند حمل</span></div>
+<div class="card"><span>کمیسیون کل</span><strong id="commission"></strong><span>میلیون تومان</span></div>
+<div class="card"><span>میانگین کمیسیون هر بارنامه</span><strong id="average"></strong><span>هزار تومان</span></div>
+<div class="card"><span>مسیر فعال</span><strong id="routes"></strong><span>مبدأ به مقصد</span></div>
+</section>
+<div class="grid">
+<section class="panel"><h2>روند صدور و کمیسیون</h2><p class="detail" id="trendLabel"></p><svg id="trend" viewBox="0 0 630 235" role="img" aria-labelledby="trendTitle"></svg></section>
+<section class="panel"><h2>استان‌های مبدأ</h2><p class="detail" id="provinceLabel"></p><div id="bars"></div></section>
+</div>
+<section class="panel"><h2>عملکرد مسیرها</h2><div class="scroll"><table><thead><tr><th>مبدأ</th><th>مقصد</th><th>تعداد بارنامه</th><th>کمیسیون (میلیون تومان)</th></tr></thead><tbody id="body"></tbody></table></div></section>
+</main>
+<script>
+const months = ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'];
+const routes = [
+  ['تهران','اصفهان'],['تهران','خراسان رضوی'],['اصفهان','یزد'],['فارس','هرمزگان'],
+  ['خراسان رضوی','تهران'],['خوزستان','تهران'],['البرز','گیلان'],['آذربایجان شرقی','البرز']
+];
+const season = [0.71,0.93,0.97,1.04,1.07,1.16,1.02,1.10,1.15,0.94,1.12,1.22];
+const data = months.flatMap((_, month) => routes.map(([origin,destination], route) => {
+  const count = Math.round((520 - route * 44 + (month * 23 + route * 31) % 127) * season[month]);
+  const commission = count * (137000 + route * 11000 + month * 2500);
+  return {month,route,origin,destination,count,commission};
+}));
+const el = id => document.getElementById(id);
+const fmt = value => new Intl.NumberFormat('fa-IR',{maximumFractionDigits:1}).format(value);
+for (const [i, name] of months.entries()) el('month').add(new Option(name,String(i)));
+for (const name of new Set(routes.map(route=>route[0]))) el('province').add(new Option(name,name));
+const sum = (rows, key) => rows.reduce((total,row)=>total+row[key],0);
+function groups(rows, key) {
+  const result = new Map();
+  for (const row of rows) {
+    const label = row[key];
+    if (!result.has(label)) result.set(label,[]);
+    result.get(label).push(row);
+  }
+  return result;
+}
+function chart(points, units) {
+  const max = Math.max(1,...points.map(p=>p.value));
+  const coords = points.map(({value},i)=>({
+    x: points.length===1 ? 320 : 607 - i*551/(points.length-1),
+    y: 177 - 152*value/max
+  }));
+  const grid = [0,0.25,0.5,0.75,1].map(f=>{
+    const y=177-152*f;
+    return '<line x1="55" x2="608" y1="'+y+'" y2="'+y+'" stroke="#dce5e9"/><text x="45" y="'+(y+5)+'" text-anchor="end">'+fmt(max*f)+'</text>';
+  }).join('');
+  const marks = coords.map(({x,y},i)=>'<circle cx="'+x+'" cy="'+y+'" r="4.5" fill="#00776f"><title>'+points[i].name+' · '+fmt(points[i].value)+'</title></circle>').join('');
+  const labels = coords.map(({x},i)=>'<text x="'+x+'" y="204" text-anchor="middle">'+points[i].name+'</text>').join('');
+  const line = coords.map(({x,y})=>x+','+y).join(' ');
+  el('trend').innerHTML = '<title id="trendTitle">روند '+units+'</title><g fill="#4f6575" font-size="13" direction="ltr">'+grid+labels+'</g><polyline points="'+line+'" fill="none" stroke="#00776f" stroke-width="3"/>'+marks;
+}
+function render() {
+  const month=el('month').value, province=el('province').value, measure=el('measure').value;
+  const rows=data.filter(row=>(month===''||row.month===Number(month))&&(!province||row.origin===province));
+  const count=sum(rows,'count'), commission=sum(rows,'commission');
+  el('count').textContent=fmt(count);
+  el('commission').textContent=fmt(commission/1e6);
+  el('average').textContent=fmt(count?commission/count/1e3:0);
+  const byRoute=groups(rows,'route');
+  el('routes').textContent=fmt(byRoute.size);
+  const units=measure==='count'?'تعداد بارنامه':'کمیسیون (میلیون تومان)';
+  el('trendLabel').textContent=units;
+  el('provinceLabel').textContent=units;
+  const value=group=>sum(group,measure)/(measure==='commission'?1e6:1);
+  chart([...groups(rows,'month')].map(([key,group])=>({name:months[key],value:value(group)})),units);
+  const provinces=[...groups(rows,'origin')].map(([name,group])=>({name,value:value(group)})).sort((a,b)=>b.value-a.value);
+  const largest=provinces[0]?.value||1;
+  el('bars').replaceChildren(...provinces.map(item=>{
+    const row=document.createElement('div');
+    row.className='bar-row';
+    row.innerHTML='<span>'+item.name+'</span><div class="bar-track" aria-hidden="true"><div class="bar" style="width:'+100*item.value/largest+'%"></div></div><strong>'+fmt(item.value)+'</strong>';
+    return row;
+  }));
+  const ranked=[...byRoute.values()].sort((a,b)=>sum(b,measure)-sum(a,measure));
+  el('body').replaceChildren(...ranked.map(group=>{
+    const row=document.createElement('tr');
+    const {origin,destination}=group[0];
+    for (const value of [origin,destination,fmt(sum(group,'count')),fmt(sum(group,'commission')/1e6)]) row.insertCell().textContent=value;
+    return row;
+  }));
+}
+for(const id of ['month','province','measure'])el(id).addEventListener('change',render);
+el('reset').addEventListener('click',()=>{el('month').value='';el('province').value='';el('measure').value='count';render();});
+render();
+</script>
+</body>
+</html>
